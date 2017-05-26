@@ -596,6 +596,27 @@ def get_anonymization_info(sid, anon_sid_cmd, old_sid, anon_csv, idir):
         return (anon_sid, anon_outdir)
 
 
+def get_output_sid_and_dir(outdir, sid, ses):
+        output_sid = sid
+        if is_bids and not sid.isalnum():  # alphanumeric only
+            output_sid = ''.join([x for x in sid if x.isalnum()])
+            lgr.warn('{0} contained nonalphanumeric character(s), subject '
+                     'ID was cleaned to be {1}'.format(output_sid, sid))
+
+        # Figure out where to stick supplemental info files
+        if not sid.startswith('sub-'):
+            idir = os.path.join(outdir, 'sub-' + output_sid)
+        else:
+            idir = os.path.join(outdir, output_sid)
+        if is_bids and ses:
+            idir = os.path.join(idir, 'ses-%s' % str(ses))
+        # all heudiconv stuff in info folder
+        idir = os.path.join(idir, 'info')
+        if not os.path.exists(idir):
+            os.makedirs(idir)
+        return (output_sid, idir)
+
+
 def convert_dicoms(subjs, dicom_dir_template, outdir, heuristic_file, converter,
                    queue=None, anon_sid_cmd=None, anon_outdir=None, with_prov=False,
                    ses=None, is_bids=False, sbatch_args='-N1 -c2 --mem=20G -t 01:00:00',
@@ -704,25 +725,7 @@ def convert_dicoms(subjs, dicom_dir_template, outdir, heuristic_file, converter,
                 "atm we support processing only 1 subject/session at a time"
             sess, sid = session_subject_ids.pop()
 
-
-        if is_bids and not sid.isalnum(): # alphanumeric only
-            old_sid = sid
-            cleaner = lambda y: ''.join([x for x in y if x.isalnum()])
-            sid = cleaner(sid) #strip out
-            lgr.warn('{0} contained nonalphanumeric character(s), subject '
-                     'ID was cleaned to be {1}'.format(old_sid, sid))
-
-        # Figure out where to stick supplemental info files
-        if is_bids and not sid.startswith('sub-'):
-            idir = os.path.join(outdir, 'sub-' + sid)
-        else:
-            idir = os.path.join(outdir, sid)
-        if is_bids and ses:
-            idir = os.path.join(idir, 'ses-%s' % str(ses))
-        # all heudiconv stuff in info folder
-        idir = os.path.join(idir, 'info')
-        if not os.path.exists(idir):
-            os.makedirs(idir)
+        (output_sid, idir) = get_output_sid_and_dir(outdir, sid, ses)
 
         (anon_sid, anon_outdir) = get_anonymization_info(
             sid=sid,
