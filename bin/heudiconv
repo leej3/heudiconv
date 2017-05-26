@@ -570,14 +570,14 @@ def convert(items, symlink=True, converter=None,
     shutil.rmtree(tmpdir)
 
 
-def get_anonymization_info(sid, anon_sid_cmd, old_sid, anon_csv, idir):
+def try_anonymization(sid=None,anon_sid_cmd=None,anon_csv=None):
         # Anonymization
         #
-        anon_sid = sid
         if anon_sid_cmd is not None:
             from subprocess import check_output
-            anon_sid = check_output([anon_sid_cmd, old_sid]).strip()
-            lgr.info("Anonymized sid %s into %s", old_sid, anon_sid)
+            output_sid = check_output([anon_sid_cmd, sid]).strip()
+            lgr.info("Anonymized sid %s into %s", sid, output_sid)
+            is_anonymized = True
         elif anon_csv is not None:
             lut = {}
             with open(anon_csv, 'r') as f:
@@ -585,36 +585,44 @@ def get_anonymization_info(sid, anon_sid_cmd, old_sid, anon_csv, idir):
                     (key, value) = line.split(',')
                     lut[key] = value
             try:
-                anon_sid = lut[sid]
+                output_sid = lut[sid].strip()
+                lgr.info("Anonymized sid %s into %s", sid, output_sid)
+                is_anonymized = True
             except KeyError as err:
+                # might want to warn and skip subject instead of
+                # throwing an error
                 print("Subject {0} not found in {1}".format(err, anon_csv))
                 raise
 
         else:
-            anon_outdir = idir
+            output_sid = sid
+            is_anonymized = False
 
-        return (anon_sid, anon_outdir)
+        return (output_sid, is_anonymized)
 
 
-def get_output_sid_and_dir(outdir, sid, ses):
-        output_sid = sid
+def get_output_sid_and_idir(outdir, sid, ses, is_bids):
+
         if is_bids and not sid.isalnum():  # alphanumeric only
-            output_sid = ''.join([x for x in sid if x.isalnum()])
+            old_sid = sid
+            sid = ''.join([x for x in sid if x.isalnum()])
             lgr.warn('{0} contained nonalphanumeric character(s), subject '
-                     'ID was cleaned to be {1}'.format(output_sid, sid))
+                     'ID was cleaned to be {1}'.format(old_sid, sid))
 
-        # Figure out where to stick supplemental info files
-        if not sid.startswith('sub-'):
-            idir = os.path.join(outdir, 'sub-' + output_sid)
+# Figure out where to stick supplemental info files
+        if is_bids and not sid.startswith('sub-'):
+            idir = os.path.join(outdir, 'sub-' + sid)
         else:
-            idir = os.path.join(outdir, output_sid)
+            idir = os.path.join(outdir, sid)
+
         if is_bids and ses:
+# might want to anonymize "ses" in the same way as subject
             idir = os.path.join(idir, 'ses-%s' % str(ses))
         # all heudiconv stuff in info folder
         idir = os.path.join(idir, 'info')
         if not os.path.exists(idir):
             os.makedirs(idir)
-        return (output_sid, idir)
+        return (sid, idir)
 
 
 def convert_dicoms(subjs, dicom_dir_template, outdir, heuristic_file, converter,
@@ -725,14 +733,12 @@ def convert_dicoms(subjs, dicom_dir_template, outdir, heuristic_file, converter,
                 "atm we support processing only 1 subject/session at a time"
             sess, sid = session_subject_ids.pop()
 
-        (output_sid, idir) = get_output_sid_and_dir(outdir, sid, ses)
-
-        (anon_sid, anon_outdir) = get_anonymization_info(
+        (output_sid, is_anonymized) = try_anonymization(
             sid=sid,
             anon_sid_cmd=anon_sid_cmd,
-            old_sid=old_sid,
-            anon_sid_cmd=anon_csv,
-            idir=idir)
+            anon_csv=anon_csv)
+
+        (output_sid, idir) = get_output_sid_and_idir(outdir, output_sid, ses, is_bids)
 
         shutil.copy(heuristic_file, idir)
         path, fname = os.path.split(heuristic_file)
@@ -769,19 +775,15 @@ def convert_dicoms(subjs, dicom_dir_template, outdir, heuristic_file, converter,
 
         sourcedir = None
         if is_bids:
-            sourcedir = os.path.join(outdir, 'sourcedata', sid)
+            sourcedir = os.path.join(outdir, 'sourcedata', output_sid)
             if ses:
                 sourcedir = os.path.join(sourcedir, 'ses-%s' % str(ses))
 
-        #tdir = os.path.join(anon_outdir, anon_sid)
-        if anon_sid_cmd:
-            tdir = os.path.join(anon_outdir, anon_sid)
-        else:
-            tdir = os.path.dirname(idir)
+        tdir = os.path.dirname(idir)
 
         if converter != 'none':
             lgr.info("Doing conversion using %s", converter)
-            cinfo = conversion_info(anon_sid, tdir, info, filegroup,
+            cinfo = conversion_info(output_sid, tdir, info, filegroup,
                                     basedir=tmpdir,
                                     ses=ses)
             convert(cinfo,
