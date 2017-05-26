@@ -570,6 +570,32 @@ def convert(items, symlink=True, converter=None,
     shutil.rmtree(tmpdir)
 
 
+def get_anonymization_info(sid, anon_sid_cmd, old_sid, anon_csv, idir):
+        # Anonymization
+        #
+        anon_sid = sid
+        if anon_sid_cmd is not None:
+            from subprocess import check_output
+            anon_sid = check_output([anon_sid_cmd, old_sid]).strip()
+            lgr.info("Anonymized sid %s into %s", old_sid, anon_sid)
+        elif anon_csv is not None:
+            lut = {}
+            with open(anon_csv, 'r') as f:
+                for line in f:
+                    (key, value) = line.split(',')
+                    lut[key] = value
+            try:
+                anon_sid = lut[sid]
+            except KeyError as err:
+                print("Subject {0} not found in {1}".format(err, anon_csv))
+                raise
+
+        else:
+            anon_outdir = idir
+
+        return (anon_sid, anon_outdir)
+
+
 def convert_dicoms(subjs, dicom_dir_template, outdir, heuristic_file, converter,
                    queue=None, anon_sid_cmd=None, anon_outdir=None, with_prov=False,
                    ses=None, is_bids=False, sbatch_args='-N1 -c2 --mem=20G -t 01:00:00',
@@ -698,28 +724,12 @@ def convert_dicoms(subjs, dicom_dir_template, outdir, heuristic_file, converter,
         if not os.path.exists(idir):
             os.makedirs(idir)
 
-        #
-        # Anonymization
-        #
-        anon_sid = sid
-        if anon_sid_cmd is not None:
-            from subprocess import check_output
-            anon_sid = check_output([anon_sid_cmd, sid]).strip()
-            lgr.info("Anonymized sid %s into %s", sid, anon_sid)
-        elif anon_csv is not None:
-            lut={}
-            with open(anon_csv, 'r') as f:
-                for line in f:
-                    (key, value) = line.split(',')
-                    lut[key] = value
-            try:
-                anon_sid = lut[sid]
-            except KeyError as err:
-                print("Subject {0} not found in {1}".format(err, anon_csv))
-                raise
-
-        else:
-            anon_outdir = idir
+        (anon_sid, anon_outdir) = get_anonymization_info(
+            sid=sid,
+            anon_sid_cmd=anon_sid_cmd,
+            old_sid=old_sid,
+            anon_sid_cmd=anon_csv,
+            idir=idir)
 
         shutil.copy(heuristic_file, idir)
         path, fname = os.path.split(heuristic_file)
