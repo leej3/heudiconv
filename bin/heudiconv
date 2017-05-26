@@ -573,7 +573,7 @@ def convert(items, symlink=True, converter=None,
 def convert_dicoms(subjs, dicom_dir_template, outdir, heuristic_file, converter,
                    queue=None, anon_sid_cmd=None, anon_outdir=None, with_prov=False,
                    ses=None, is_bids=False, sbatch_args='-N1 -c2 --mem=20G -t 01:00:00',
-                   min_meta=False):
+                   min_meta=False, anon_csv=None):
 
     if '%s' in dicom_dir_template:
         raise ValueError("Formatting DICOM search pattern with '%s' is "
@@ -706,6 +706,18 @@ def convert_dicoms(subjs, dicom_dir_template, outdir, heuristic_file, converter,
             from subprocess import check_output
             anon_sid = check_output([anon_sid_cmd, sid]).strip()
             lgr.info("Anonymized sid %s into %s", sid, anon_sid)
+        elif anon_csv is not None:
+            lut={}
+            with open(anon_csv, 'r') as f:
+                for line in f:
+                    (key, value) = line.split(',')
+                    lut[key] = value
+            try:
+                anon_sid = lut[sid]
+            except KeyError as err:
+                print("Subject {0} not found in {1}".format(err, anon_csv))
+                raise
+
         else:
             anon_outdir = idir
 
@@ -856,6 +868,11 @@ s3
                         DICOMs to anonymmized IDs. Such command must take a
                         single argument and return a single anonymized ID.
                         Also see --conv-outdir''')
+    parser.add_argument('--anon-csv', dest='anon_csv',
+                        default=None,
+                        help='''Path to csv file containing a mapping of subject ids in
+                         and anonymized ids in two columns with no header . Provides
+                          an alternative to --anon-cmd''')
     parser.add_argument('-f', '--heuristic', dest='heuristic_file', required=True,
                         help='python script containing heuristic')
     parser.add_argument('-q', '--queue', dest='queue', default=None,
@@ -883,6 +900,7 @@ s3
                    converter=args.converter,
                    queue=args.queue,
                    anon_sid_cmd=args.anon_cmd,
+                   anon_csv=args.anon_csv,
                    anon_outdir=args.conv_outputdir,
                    with_prov=args.with_prov,
                    ses=args.session,
