@@ -294,10 +294,14 @@ def get_formatted_scans_key_row(item):
                                             force=True))
     # we need to store filenames and acquisition times
     # parse date and time and get it into isoformat
-    date = mw.dcm_data.ContentDate
-    time = mw.dcm_data.ContentTime.split('.')[0]
-    td = time + date
-    acq_time = datetime.strptime(td, '%H%M%S%Y%m%d').isoformat()
+    try:
+        date = mw.dcm_data.ContentDate
+        time = mw.dcm_data.ContentTime.split('.')[0]
+        td = time + date
+        acq_time = datetime.strptime(td, '%H%M%S%Y%m%d').isoformat()
+    except AttributeError:
+        date,time,td,acq_time = ['0000-00-00','00000.0','0000-00-00-00000.0','0000-00-00T00:00:00']
+
     # add random string
     randstr = ''.join(map(chr, sample(k=8, population=range(33, 127))))
     try:
