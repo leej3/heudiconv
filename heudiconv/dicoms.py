@@ -61,7 +61,10 @@ def group_dicoms_into_seqinfos(files, file_filter, dcmfilter, grouping):
     for fidx, filename in enumerate(files):
         # TODO after getting a regression test check if the same behavior
         #      with stop_before_pixels=True
+
+
         mw = ds.wrapper_from_data(dcm.read_file(filename, force=True))
+
 
         for sig in ('iop', 'ICE_Dims', 'SequenceName'):
             try:
@@ -75,7 +78,16 @@ def group_dicoms_into_seqinfos(files, file_filter, dcmfilter, grouping):
             lgr.info("File {} is missing any StudyInstanceUID".format(filename))
             file_studyUID = None
 
+
+
+
         try:
+            temp_ds = dcm.read_file(filename, force=True)
+            temp_ds.add_new([0x0008, 0x0016],'SOP Class UID','Raw Data Storage')
+            mw = ds.wrapper_from_data(temp_ds)
+
+            if not mw.dcm_data.get('ProtocolName',None):
+                mw.dcm_data.ProtocolName = mw.dcm_data.SeriesDescription
             series_id = (int(mw.dcm_data.SeriesNumber),
                          mw.dcm_data.ProtocolName)
             file_studyUID = mw.dcm_data.StudyInstanceUID
