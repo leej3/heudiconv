@@ -225,8 +225,7 @@ def convert(items, converter, scaninfo_suffix, custom_callable, with_prov,
             seqtype = op.basename(op.dirname(prefix)) if bids else None
 
             if outtype == 'dicom':
-                convert_dicom(item_dicoms, bids, prefix,
-                              outdir, tempdirs, symlink, overwrite)
+                continue
             elif outtype in ['nii', 'nii.gz']:
                 assert converter == 'dcm2niix', ('Invalid converter '
                                                  '{}'.format(converter))
